@@ -43,8 +43,6 @@ msgstr "打开 Excalidraw"
 msgid "The free space of Docker is less than 2GB, which may cause the installation to fail."
 msgstr "Docker 可用空间已不足2GB，可能导致安装失败。"
 
-msgid "Excalidraw Claim Token"
-msgstr "Excalidraw Claim 令牌"
-
 msgid "Please make sure there has enough space"
 msgstr "请确保有足够空间"
+
