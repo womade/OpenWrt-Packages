@@ -53,7 +53,7 @@ if [[ ! "$version" || "$version" -lt 1 ]]; then
 		uci -q set system.@system[0].timezone='CST-8'
 		uci -q del system.ntp.server
 		uci -q add_list system.ntp.server='ntp.ssss.fun'
-		uci -q add_list system.ntp.server='ntp.aliyun.com'
+		uci -q add_list system.ntp.server='pool.ntp.org'
 		uci commit system
 	fi
 
