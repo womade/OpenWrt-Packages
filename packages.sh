@@ -17,7 +17,7 @@ sed -i 's/OpenWrt/SuperNet/g' my-default-settings/files/etc/uci-defaults/99-defa
 
 # NTP
 sed -i 's/ntp.aliyun.com/ntp.ssss.fun/g' my-default-settings/files/etc/uci-defaults/99-default-settings
-sed -i 's/0.openwrt.pool.ntp.org/ntp.aliyun.com/g' my-default-settings/files/etc/uci-defaults/99-default-settings
+sed -i 's/0.openwrt.pool.ntp.org/pool.ntp.org/g' my-default-settings/files/etc/uci-defaults/99-default-settings
 
 # Timezone
 sed -i "s/'UTC'/'CST-8'\n   set system.@system[-1].zonename='Asia\/Shanghai'/g" base-files/files/bin/config_generate
