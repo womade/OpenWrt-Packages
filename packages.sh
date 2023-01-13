@@ -28,6 +28,7 @@ wget --no-check-certificate https://github.com/womade/LEDE_actions/raw/main/modi
 # Theme Edge
 wget --no-check-certificate https://github.com/womade/OpenWrt-Themes/raw/main/luci-theme-edge/htdocs/luci-static/edge/logo.png -O luci-theme-edge/htdocs/luci-static/edge/logo.png
 wget --no-check-certificate https://github.com/womade/OpenWrt-Themes/raw/main/luci-theme-edge/htdocs/luci-static/edge/favicon.ico -O luci-theme-edge/htdocs/luci-static/edge/favicon.ico
+sed -i "s|https://cdn.jsdelivr.net/gh/kkkidding/custom2@master/audio.ogg|https://cdn.ssss.fun/media/sound/edge/audio.ogg|g" luci-theme-edge/luasrc/view/themes/edge/sysauth.htm
 
 sed -i "s/%D/SuperNet/g" base-files/files/etc/openwrt_release
 sed -i "s/by Kiddin'/@ Y-ZHENG/g" base-files/files/etc/openwrt_release
