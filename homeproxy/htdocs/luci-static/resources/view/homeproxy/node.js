@@ -1,4 +1,5 @@
-/* SPDX-License-Identifier: GPL-3.0-only
+/*
+ * SPDX-License-Identifier: GPL-3.0-only
  *
  * Copyright (C) 2022 ImmortalWrt.org
  */
@@ -179,7 +180,8 @@ function parseShareLink(uri, features) {
 				transport: params.get('type') !== 'tcp' ? params.get('type') : null,
 				tls: params.get('security') ? '1' : '0',
 				tls_sni: params.get('sni'),
-				tls_alpn: params.get('alpn') ? decodeURIComponent(params.get('alpn')).split(',') : null
+				tls_alpn: params.get('alpn') ? decodeURIComponent(params.get('alpn')).split(',') : null,
+				tls_utls: features.with_utls ? params.get('fp') : null
 			};
 			switch (params.get('type')) {
 			case 'grpc':
@@ -344,8 +346,8 @@ return view.extend({
 								if (imported_node === 0)
 									ui.addNotification(null, E('p', _('No valid share link found.')));
 								else
-									ui.addNotification(null, E('p', _('Successfully imported %s %s of total %s.').format(
-										imported_node, imported_node === 1 ? _('node') : _('nodes'), input_links.length)));
+									ui.addNotification(null, E('p', _('Successfully imported %s nodes of total %s.').format(
+										imported_node, input_links.length)));
 
 								return uci.save()
 									.then(L.bind(this.map.load, this.map))
@@ -973,11 +975,15 @@ return view.extend({
 			so = ss.option(form.ListValue, 'tls_utls', _('uTLS fingerprint'),
 				_('uTLS is a fork of "crypto/tls", which provides ClientHello fingerprinting resistance.'));
 			so.value('', _('Disable'));
+			so.value('360', _('360'));
 			so.value('android', _('Android'));
 			so.value('chrome', _('Chrome'));
+			so.value('edge', _('Edge'));
 			so.value('firefox', _('Firefox'));
 			so.value('ios', _('iOS'));
+			so.value('qq', _('QQ'));
 			so.value('random', _('Random'));
+			so.value('safari', _('Safari'));
 			so.depends('tls', '1');
 			so.modalonly = true;
 		}
@@ -1079,7 +1085,7 @@ return view.extend({
 		o.inputtitle = function(section_id) {
 			var sublist = uci.get(data[0], section_id, 'subscription_url') || [];
 			if (sublist.length > 0)
-				return _('Update %s %s').format(sublist.length, sublist.length === 1 ? _('subscription') : _('subscriptions'));
+				return _('Update %s subscriptions').format(sublist.length);
 			else {
 				this.readonly = true;
 				return _('No subscription available')
@@ -1104,7 +1110,7 @@ return view.extend({
 			});
 
 			if (subnodes.length > 0) {
-				return _('Remove %s %s').format(subnodes.length, subnodes.length === 1 ? _('node') : _('nodes'));
+				return _('Remove %s nodes').format(subnodes.length);
 			} else {
 				this.readonly = true;
 				return _('No subscription node');
@@ -1126,7 +1132,7 @@ return view.extend({
 			if (subnodes.includes(uci.get(data[0], 'config', 'main_udp_node')))
 				uci.set(data[0], 'config', 'main_udp_node', 'nil');
 
-			this.inputtitle = _('%s %s removed').format(subnodes.length, subnodes.length === 1 ? _('node') : _('nodes'));
+			this.inputtitle = _('%s nodes removed').format(subnodes.length);
 			this.readonly = true;
 
 			return this.map.save(null, true);

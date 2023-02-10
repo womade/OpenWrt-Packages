@@ -41,7 +41,7 @@ start_service() {
 	fi
 
 	mkdir -p "$RUN_DIR"
-	"$HP_DIR"/scripts/generate_sing-box.lua 2>>"$LOG_PATH"
+	ucode -S "$HP_DIR/scripts/generate_sing-box.uc" 2>>"$LOG_PATH"
 
 	local inbounds="$(jsonfilter -i "$RUN_DIR/sing-box.json" -e "@.inbounds[@.tag!='dns-in']" 2>"/dev/null")"
 	if [ ! -e "$RUN_DIR/sing-box.json" ]; then
@@ -61,17 +61,21 @@ start_service() {
 		config_get_bool auto_update "subscription" "auto_update" "0"
 		if [ "auto_update" = "1" ]; then
 			config_get auto_update_time "subscription" "auto_update_time" "2"
-			echo "0 ${auto_update_time} * * * $HP_DIR/scripts/update_geodata.sh update_version update_subscription" >> "/etc/crontabs/root"
+			echo "0 ${auto_update_time} * * * $HP_DIR/scripts/update_crond.sh" >> "/etc/crontabs/root"
+			/etc/init.d/cron restart
 		fi
-		/etc/init.d/cron restart
+
+		local ipv6_support
+		config_get_bool ipv6_support "config" "ipv6_support" "0"
 
 		# DNSMasq rules
-		local dns_port
+		local dns_port nftset_v6
 		config_get dns_port "infra" "dns_port" "5333"
+		[ "$ipv6_support" -eq "0" ] || nftset_v6=",6#inet#fw4#homeproxy_gfwlist_v6"
 		mkdir -p "$DNSMASQ_DIR"
 		echo -e "conf-dir=$DNSMASQ_DIR" > "$DNSMASQ_DIR/../dnsmasq-homeproxy.conf"
 		if [ "$routing_mode" = "gfwlist" ]; then
-			sed -r -e "s/(.*)/server=\/\1\/127.0.0.1#$dns_port\nnftset=\/\1\\/4#inet#fw4#homeproxy_gfwlist_v4,6#inet#fw4#homeproxy_gfwlist_v6/g" \
+			sed -r -e "s/(.*)/server=\/\1\/127.0.0.1#$dns_port\nnftset=\/\1\\/4#inet#fw4#homeproxy_gfwlist_v4$nftset_v6/g" \
 				"$HP_DIR/resources/gfw_list.txt" > "$DNSMASQ_DIR/gfw_list.conf"
 		elif [ "$routing_mode" = "bypass_mainland_china" ]; then
 			sed -r -e "s/(.*)/server=\/\1\/127.0.0.1#$dns_port/g" \
@@ -85,6 +89,12 @@ start_service() {
 				no-resolv
 				server=127.0.0.1#$dns_port
 			EOF
+		fi
+
+		if [ "$routing_mode" != "custom" ]; then
+			[ "$ipv6_support" -eq "0" ] || nftset_v6=",6#inet#fw4#homeproxy_proxy_addr_v6"
+			sed -r -e "s/(.*)/server=\/\1\/127.0.0.1#$dns_port\nnftset=\/\1\\/4#inet#fw4#homeproxy_proxy_addr_v4$nftset_v6/g" \
+				"$HP_DIR/resources/proxy_list.txt" > "$DNSMASQ_DIR/proxy_list.conf"
 		fi
 		/etc/init.d/dnsmasq restart >"/dev/null" 2>&1
 
@@ -101,8 +111,10 @@ start_service() {
 				ip rule add fwmark "$tproxy_mark" table "$table_mark"
 				ip route add local 0.0.0.0/0 dev lo table "$table_mark"
 
-				ip -6 rule add fwmark "$tproxy_mark" table "$table_mark"
-				ip -6 route add local ::/0 dev lo table "$table_mark"
+				if [ "$ipv6_support" -eq "1" ]; then
+					ip -6 rule add fwmark "$tproxy_mark" table "$table_mark"
+					ip -6 route add local ::/0 dev lo table "$table_mark"
+				fi
 			fi
 		else
 			local tun_name tun_mark
@@ -181,14 +193,15 @@ service_stopped() {
 	ip -6 rule del fwmark "$tun_mark" table "$table_mark" 2>"/dev/null"
 
 	# Nftables rules
-	for i in "homeproxy_outredir" "homeproxy_redirect" \
-		 "homeproxy_mangle_prerouting" "homeproxy_mangle_output"; do
+	for i in "homeproxy_dstnat_redir" "homeproxy_output_redir" "homeproxy_redirect" \
+		 "homeproxy_mangle_mark" "homeproxy_mangle_prerouting" "homeproxy_mangle_output"; do
 		nft flush chain inet fw4 "$i" 2>"/dev/null"
 		nft delete chain inet fw4 "$i" 2>"/dev/null"
 	done
 	for i in "homeproxy_localaddr_v4" "homeproxy_localaddr_v6" \
 		 "homeproxy_gfwlist_v4" "homeproxy_gfwlist_v6" \
-		 "homeproxy_mainland_addr_v4" "homeproxy_mainland_addr_v6"; do
+		 "homeproxy_mainland_addr_v4" "homeproxy_mainland_addr_v6" \
+		 "homeproxy_proxy_addr_v4" "homeproxy_proxy_addr_v6"; do
 		nft flush set inet fw4 "$i" 2>"/dev/null"
 		nft delete set inet fw4 "$i" 2>"/dev/null"
 	done
