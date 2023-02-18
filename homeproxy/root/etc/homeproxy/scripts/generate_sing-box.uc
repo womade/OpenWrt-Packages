@@ -10,7 +10,7 @@
 import { readfile, writefile } from 'fs';
 import { cursor } from 'uci';
 
-import { executeCommand, isEmpty, strToInt, removeBlankAttrs, validateHostname } from 'homeproxy';
+import { executeCommand, isEmpty, strToInt, removeBlankAttrs, validateHostname, validation } from 'homeproxy';
 import { HP_DIR, RUN_DIR } from 'homeproxy';
 
 /* UCI config start */
@@ -41,30 +41,31 @@ let wan_dns = executeCommand('ifstatus wan | jsonfilter -e \'@["dns-server"][0]\
 if (wan_dns.exitcode === 0 && trim(wan_dns.stdout))
 	wan_dns = trim(wan_dns.stdout);
 else
-	wan_dns = (routing_mode in ['proxy_mainland_china', 'global']) ? '8.8.8.8' : '114.114.114.114';
+	wan_dns = (routing_mode in ['proxy_mainland_china', 'global']) ? '208.67.222.222' : '114.114.114.114';
 
 const dns_port = uci.get(uciconfig, uciinfra, 'dns_port') || '5333';
 
-let main_node, main_udp_node, dedicated_udp_node, ipv6_support, default_outbound, default_interface,
+let main_node, main_udp_node, dedicated_udp_node, default_outbound, sniff_override = '1',
     dns_server, dns_strategy, dns_default_server, dns_disable_cache, dns_disable_cache_expire,
-    wan_proxy_ips, proxy_domain_list, wan_direct_ips, direct_domain_list,
-    redirect_port, tproxy_port, self_mark, sniff_override, tun_name, tcpip_stack, endpoint_independent_nat;
+    lan_proxy_ips, wan_proxy_ips, proxy_domain_list, direct_domain_list;
 
 if (routing_mode !== 'custom') {
 	main_node = uci.get(uciconfig, ucimain, 'main_node') || 'nil';
 	main_udp_node = uci.get(uciconfig, ucimain, 'main_udp_node') || 'nil';
-	redirect_port = uci.get(uciconfig, uciinfra, 'redirect_port') || '5331';
-	tproxy_port = uci.get(uciconfig, uciinfra, 'tproxy_port') || '5332';
-	self_mark = uci.get(uciconfig, uciinfra, 'self_mark') || '100';
-
-	ipv6_support = uci.get(uciconfig, ucimain, 'ipv6_support') || '0';
-	default_interface = uci.get(uciconfig, ucicontrol, 'bind_interface');
-
 	dedicated_udp_node = !isEmpty(main_udp_node) && !(main_udp_node in ['same', main_node]);
 
 	dns_server = uci.get(uciconfig, ucimain, 'dns_server');
 	if (isEmpty(dns_server) || dns_server === 'wan')
 		dns_server = wan_dns;
+
+	for (let i in ['lan_global_proxy_ipv4_ips', 'lan_global_proxy_ipv6_ips']) {
+		const global_proxy_ips = uci.get(uciconfig, ucicontrol, i);
+		if (length(global_proxy_ips)) {
+			if (!lan_proxy_ips)
+				lan_proxy_ips = [];
+			map(global_proxy_ips, (v) => push(lan_proxy_ips, v));
+		}
+	}
 
 	for (let i in ['wan_proxy_ipv4_ips', 'wan_proxy_ipv6_ips']) {
 		const proxy_ips = uci.get(uciconfig, ucicontrol, i);
@@ -75,22 +76,12 @@ if (routing_mode !== 'custom') {
 		}
 	}
 
-	for (let i in ['wan_direct_ipv4_ips', 'wan_direct_ipv6_ips']) {
-		const direct_ips = uci.get(uciconfig, ucicontrol, i);
-		if (length(direct_ips)) {
-			if (!wan_direct_ips)
-				wan_direct_ips = [];
-			map(direct_ips, (v) => push(wan_direct_ips, v));
-		}
-	}
-
-	proxy_domain_list = split(trim(readfile(HP_DIR + '/resources/proxy_list.txt')), /[\r\n]/);
-	direct_domain_list = split(trim(readfile(HP_DIR + '/resources/direct_list.txt')), /[\r\n]/);
+	proxy_domain_list = trim(readfile(HP_DIR + '/resources/proxy_list.txt'));
+	direct_domain_list = trim(readfile(HP_DIR + '/resources/direct_list.txt'));
 	if (proxy_domain_list)
 		proxy_domain_list = split(proxy_domain_list, /[\r\n]/);
 	if (direct_domain_list)
 		direct_domain_list = split(direct_domain_list, /[\r\n]/);
-
 } else {
 	/* DNS settings */
 	dns_strategy = uci.get(uciconfig, ucidnssetting, 'dns_strategy');
@@ -100,12 +91,30 @@ if (routing_mode !== 'custom') {
 
 	/* Routing settings */
 	default_outbound = uci.get(uciconfig, uciroutingsetting, 'default_outbound') || 'nil';
-	default_interface = uci.get(uciconfig, uciroutingsetting, 'default_interface');
 	sniff_override = uci.get(uciconfig, uciroutingsetting, 'sniff_override');
-	tun_name = uci.get(uciconfig, uciinfra, 'tun_name') || 'singtun0';
-	tcpip_stack = uci.get(uciconfig, uciroutingsetting, 'tcpip_stack') || 'gvisor';
-	endpoint_independent_nat = uci.get(uciconfig, uciroutingsetting, 'endpoint_independent_nat');
 }
+
+const proxy_mode = uci.get(uciconfig, ucimain, 'proxy_mode') || 'redirect_tproxy',
+      ipv6_support = uci.get(uciconfig, ucimain, 'ipv6_support') || '0',
+      default_interface = uci.get(uciconfig, ucicontrol, 'bind_interface');
+
+let self_mark, redirect_port, tproxy_port,
+    tun_name, tcpip_stack = 'gvisor', endpoint_independent_nat = '1';
+if (match(proxy_mode, /redirect/)) {
+	self_mark = uci.get(uciconfig, 'infra', 'self_mark') || '100';
+	redirect_port = uci.get(uciconfig, 'infra', 'redirect_port') || '5331';
+}
+if (match(proxy_mode), /tproxy/)
+	if (main_udp_node !== 'nil' || routing_mode === 'custom')
+		tproxy_port = uci.get(uciconfig, 'infra', 'tproxy_port') || '5332';
+if (match(proxy_mode), /tun/) {
+	tun_name = uci.get(uciconfig, uciinfra, 'tun_name') || 'singtun0';
+	if (routing_mode === 'custom') {
+		tcpip_stack = uci.get(uciconfig, uciroutingsetting, 'tcpip_stack') || 'gvisor';
+		endpoint_independent_nat = uci.get(uciconfig, uciroutingsetting, 'endpoint_independent_nat') || '1';
+	}
+}
+
 /* UCI config end */
 
 /* Config helper start */
@@ -116,6 +125,7 @@ function generate_outbound(node) {
 	const outbound = {
 		type: node.type,
 		tag: 'cfg-' + node['.name'] + '-out',
+		routing_mark: strToInt(self_mark),
 
 		server: (node.type !== 'direct') ? node.address : null,
 		server_port: (node.type !== 'direct') ? int(node.port) : null,
@@ -149,14 +159,14 @@ function generate_outbound(node) {
 		version: (node.type === 'shadowtls') ? strToInt(node.shadowtls_version) : ((node.type === 'socks') ? node.socks_version : null),
 		/* VLESS / VMess */
 		uuid: node.uuid,
-		alter_id: node.vmess_alterid,
+		alter_id: strToInt(node.vmess_alterid),
 		security: node.vmess_encrypt,
 		global_padding: node.vmess_global_padding ? (node.vmess_global_padding === '1') : null,
 		authenticated_length: node.vmess_authenticated_length ? (node.vmess_authenticated_length === '1') : null,
 		packet_encoding: node.packet_encoding,
 		/* WireGuard */
 		system_interface: (node.type === 'wireguard') || null,
-		interface_name: (node.type === 'wireguard') ? "singwg-cfg-" + node['.name'] + "-out" : null,
+		interface_name: (node.type === 'wireguard') ? 'singwg-cfg-' + node['.name'] + '-out' : null,
 		local_address: node.wireguard_local_address,
 		private_key: node.wireguard_private_key,
 		peer_public_key: node.wireguard_peer_public_key,
@@ -211,7 +221,7 @@ function get_outbound(cfg) {
 	if (isEmpty(cfg))
 		return null;
 
-	if (cfg in ['direct-out', 'black-out'])
+	if (cfg in ['direct-out', 'block-out'])
 		return cfg;
 	else {
 		const node = uci.get(uciconfig, cfg, 'node');
@@ -269,6 +279,7 @@ config.dns = {
 			address: 'rcode://name_error'
 		}
 	],
+	rules: [],
 	strategy: dns_strategy,
 	disable_cache: (dns_disable_cache === '1'),
 	disable_expire: (dns_disable_cache_expire === '1')
@@ -277,34 +288,36 @@ config.dns = {
 if (!isEmpty(main_node)) {
 	/* Avoid DNS loop */
 	const main_node_addr = uci.get(uciconfig, main_node, 'address');
-	if (validateHostname(main_node_addr)) {
-		if (!config.dns.rules)
-			config.dns.rules = [];
-
+	if (validateHostname(main_node_addr))
 		push(config.dns.rules, {
 			domain: main_node_addr,
 			server: 'default-dns'
 		});
-	}
+
 	if (dedicated_udp_node) {
 		const main_udp_node_addr = uci.get(uciconfig, main_udp_node, 'address');
-		if (validateHostname(main_udp_node_addr)) {
-			if (!config.dns.rules)
-				config.dns.rules = [];
-
+		if (validateHostname(main_udp_node_addr))
 			push(config.dns.rules, {
 				domain: main_udp_node_addr,
 				server: 'default-dns'
 			});
-		}
 	}
+
+	if (direct_domain_list)
+		push(config.dns.rules, {
+			domain_keyword: direct_domain_list,
+			server: 'default-dns'
+		});
+
+	if (isEmpty(config.dns.rules))
+		config.dns.rules = null;
 
 	let default_final_dns = 'default-dns';
 	/* Main DNS */
 	if (dns_server !== wan_dns) {
 		push(config.dns.servers, {
 			tag: 'main-dns',
-			address: dns_server,
+			address: 'tcp://' + ((validation('ip6addr', dns_server) === 0) ? `[${dns_server}]` : dns_server),
 			strategy: (ipv6_support !== '1') ? 'ipv4_only' : null,
 			detour: 'main-out'
 		});
@@ -331,7 +344,6 @@ if (!isEmpty(main_node)) {
 	});
 
 	/* DNS rules */
-	config.dns.rules = [];
 	uci.foreach(uciconfig, ucidnsrule, (cfg) => {
 		if (cfg.enabled !== '1')
 			return;
@@ -352,6 +364,7 @@ if (!isEmpty(main_node)) {
 			port: parse_port(cfg.port),
 			port_range: cfg.port_range,
 			process_name: cfg.process_name,
+			process_path: cfg.process_path,
 			user: cfg.user,
 			invert: (cfg.invert === '1'),
 			outbound: get_outbound(cfg.outbound),
@@ -378,7 +391,7 @@ if (!isEmpty(main_node) || !isEmpty(default_outbound)) {
 		listen_port: int(dns_port)
 	});
 
-	if (routing_mode !== 'custom') {
+	if (match(proxy_mode, /redirect/))
 		push(config.inbounds, {
 			type: 'redirect',
 			tag: 'redirect-in',
@@ -386,21 +399,20 @@ if (!isEmpty(main_node) || !isEmpty(default_outbound)) {
 			listen: '::',
 			listen_port: int(redirect_port),
 			sniff: true,
-			sniff_override_destination: true
+			sniff_override_destination: (sniff_override === '1')
 		});
+	if (match(proxy_mode, /tproxy/))
+		push(config.inbounds, {
+			type: 'tproxy',
+			tag: 'tproxy-in',
 
-		if (!isEmpty(main_udp_node))
-			push(config.inbounds, {
-				type: 'tproxy',
-				tag: 'tproxy-in',
-
-				listen: "::",
-				listen_port: int(tproxy_port),
-				network: 'udp',
-				sniff: true,
-				sniff_override_destination: true
-			});
-	} else {
+			listen: '::',
+			listen_port: int(tproxy_port),
+			network: 'udp',
+			sniff: true,
+			sniff_override_destination: (sniff_override === '1')
+		});
+	if (match(proxy_mode, /tun/))
 		push(config.inbounds, {
 			type: 'tun',
 			tag: 'tun-in',
@@ -416,7 +428,6 @@ if (!isEmpty(main_node) || !isEmpty(default_outbound)) {
 			sniff_override_destination: (sniff_override === '1'),
 			domain_strategy: dns_strategy
 		});
-	}
 }
 
 if (server_enabled === '1')
@@ -512,32 +523,29 @@ if (server_enabled === '1')
 /* Default outbounds */
 config.outbounds = [
 	{
-		type: "direct",
-		tag: "direct-out",
+		type: 'direct',
+		tag: 'direct-out',
+		routing_mark: strToInt(self_mark)
 	},
 	{
-		type: "block",
-		tag: "block-out"
+		type: 'block',
+		tag: 'block-out'
 	},
 	{
-		type: "dns",
-		tag: "dns-out"
+		type: 'dns',
+		tag: 'dns-out'
 	}
 ];
 
 /* Main outbounds */
 if (!isEmpty(main_node)) {
-	config.outbounds[0].routing_mark = int(self_mark);
-
 	const main_node_cfg = uci.get_all(uciconfig, main_node) || {};
 	push(config.outbounds, generate_outbound(main_node_cfg));
-	config.outbounds[length(config.outbounds)-1].routing_mark = int(self_mark);
 	config.outbounds[length(config.outbounds)-1].tag = 'main-out';
 
 	if (dedicated_udp_node) {
 		const main_udp_node_cfg = uci.get_all(uciconfig, main_udp_node) || {};
 		push(config.outbounds, generate_outbound(main_udp_node_cfg));
-		config.outbounds[length(config.outbounds)-1].routing_mark = int(self_mark);
 		config.outbounds[length(config.outbounds)-1].tag = 'main-udp-out';
 	}
 
@@ -561,12 +569,12 @@ if (!isEmpty(main_node) || !isEmpty(default_outbound))
 		geoip: {
 			path: HP_DIR + '/resources/geoip.db',
 			download_url: 'https://github.com/1715173329/sing-geoip/releases/latest/download/geoip.db',
-			download_detour: get_outbound(default_outbound) || (routing_mode !== 'proxy_mainland_china' && !isEmpty(main_node)) ? 'main-out' : 'direct-out'
+			download_detour: get_outbound(default_outbound) || ((routing_mode !== 'proxy_mainland_china' && !isEmpty(main_node)) ? 'main-out' : 'direct-out')
 		},
 		geosite: {
 			path: HP_DIR + '/resources/geosite.db',
 			download_url: 'https://github.com/1715173329/sing-geosite/releases/latest/download/geosite.db',
-			download_detour: get_outbound(default_outbound) || (routing_mode !== 'proxy_mainland_china' && !isEmpty(main_node)) ? 'main-out' : 'direct-out'
+			download_detour: get_outbound(default_outbound) || ((routing_mode !== 'proxy_mainland_china' && !isEmpty(main_node)) ? 'main-out' : 'direct-out')
 		},
 		rules: [
 			{
@@ -585,9 +593,10 @@ if (!isEmpty(main_node) || !isEmpty(default_outbound))
 if (!isEmpty(main_node)) {
 	/* Routing rules */
 	/* Proxy list */
-	if (length(proxy_domain_list) || length(wan_proxy_ips)) {
+	if (length(proxy_domain_list) || length(lan_proxy_ips) || length(wan_proxy_ips)) {
 		push(config.route.rules, {
 			domain_keyword: proxy_domain_list,
+			source_ip_cidr: lan_proxy_ips,
 			ip_cidr: wan_proxy_ips,
 			network: dedicated_udp_node ? 'tcp' : null,
 			outbound: 'main-out'
@@ -596,6 +605,7 @@ if (!isEmpty(main_node)) {
 		if (dedicated_udp_node) {
 			push(config.route.rules, {
 				domain_keyword: proxy_domain_list,
+				source_ip_cidr: lan_proxy_ips,
 				ip_cidr: wan_proxy_ips,
 				network: 'udp',
 				outbound: 'main-udp-out'
@@ -604,14 +614,13 @@ if (!isEmpty(main_node)) {
 	}
 
 	/* Direct list */
-	if (length(direct_domain_list) || length(wan_direct_ips))
+	if (length(direct_domain_list))
 		push(config.route.rules, {
 			domain_keyword: direct_domain_list,
-			ip_cidr: wan_direct_ips,
 			outbound: 'direct-out'
 		});
 
-	let routing_geosite, routing_geoip;
+	let routing_geosite;
 	if (routing_mode === 'gfwlist') {
 		routing_geosite = [ 'gfw', 'greatfire' ];
 
@@ -634,7 +643,6 @@ if (!isEmpty(main_node)) {
 	if (dedicated_udp_node)
 		push(config.route.rules, {
 			geosite: routing_geosite,
-			geoip: routing_geoip,
 			network: 'udp',
 			outbound: 'main-udp-out'
 		});
@@ -664,6 +672,7 @@ if (!isEmpty(main_node)) {
 			port: parse_port(cfg.port),
 			port_range: cfg.port_range,
 			process_name: cfg.process_name,
+			process_path: cfg.process_path,
 			user: cfg.user,
 			invert: (cfg.invert === '1'),
 			outbound: get_outbound(cfg.outbound)
