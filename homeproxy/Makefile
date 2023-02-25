@@ -5,19 +5,21 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-homeproxy
-PKG_VERSION:=1.0-dev-testing1
-PKG_RELEASE:=33
+PKG_VERSION:=1.0-usertesting-0222
+PKG_RELEASE:=40
 
 LUCI_TITLE:=The modern ImmortalWrt proxy platform for ARM64/AMD64
 LUCI_PKGARCH:=all
 LUCI_DEPENDS:= \
 	+sing-box \
-	+@SING_BOX_BUILD_GVISOR \
-	+curl
+	+curl \
+	+firewall4 \
+	+kmod-nft-tproxy
 
 define Package/luci-app-homeproxy/conffiles
 /etc/config/homeproxy
 /etc/homeproxy/certs/
+/etc/homeproxy/resources/
 endef
 
 include $(TOPDIR)/feeds/luci/luci.mk
