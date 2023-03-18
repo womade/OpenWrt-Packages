@@ -15,7 +15,7 @@ import { urldecode, urlencode, urldecode_params } from 'luci.http';
 import { init_action } from 'luci.sys';
 
 import {
-	calcStringMD5, CURL, executeCommand, decodeBase64Str,
+	calcStringMD5, cURL, executeCommand, decodeBase64Str,
 	isEmpty, parseURL, validation,
 	HP_DIR, RUN_DIR
 } from 'homeproxy';
@@ -360,11 +360,11 @@ function parse_uri(uri) {
 		if (config.address)
 			config.address = replace(config.address, /\[|\]/g, '');
 
-		if (validation('host', config.address) !== 0 || validation('port', config.port) !== 0) {
+		if (!validation('host', config.address) || !validation('port', config.port)) {
 			log(sprintf('Skipping invalid %s node: %s.', config.type, config.label || 'NULL'));
 			return null;
 		} else if (!config.label)
-			config.label = (validation('ip6addr', config.address) === 0 ?
+			config.label = (validation('ip6addr', config.address) ?
 				`[${config.address}]` : config.address) + ':' + config.port;
 	}
 
@@ -378,7 +378,7 @@ function main() {
 	}
 
 	for (let url in subscription_urls) {
-		const res = CURL(url);
+		const res = cURL(url);
 		if (!res) {
 			log(sprintf('Failed to fetch resources from %s.', url));
 			continue;
