@@ -6,9 +6,9 @@ luci-app-modeminfo is fork from https://github.com/IceG2020/luci-app-3ginfo
 
 Supported devices:
 
- - Quectel EC200T/EC21/EC25/EP06/EM12
+ - Quectel EC200T/EC21/EC25/EP06/EM12/EM160R-GL
 
- - SimCom SIM7600E-H
+ - SimCom SIM7600E-H/SIM7906
 
  - Huawei E3372 (LTE)/ME909
 
@@ -21,6 +21,8 @@ Supported devices:
  - MikroTik R11e-LTE/R11e-LTE6 (temporary dropped)
 
  - Fibocom NL668/NL678/L850/L860
+
+ - Gosuncnwelink GM510
 
 <details>
 <summary>Package contents:</summary>
@@ -38,6 +40,7 @@ Supported devices:
 |modeminfo-serial-dell |Dell DW5821e modem support |
 |modeminfo-serial-fibocom |Fibocom LN668/NL678 modems support |
 |modeminfo-serial-xmm |Fibocom L850/L860 modems support |
+|modeminfo-serial-gosun |Gosuncnwelink GM510 support |
 </details>
 
 <details>

@@ -60,11 +60,25 @@ export function calcStringMD5(str) {
 	return trim(output.stdout);
 };
 
-export function cURL(url) {
+export function getTime(epoch) {
+	const local_time = localtime(epoch);
+	return replace(replace(sprintf(
+		'%d-%2d-%2d@%2d:%2d:%2d',
+		local_time.year,
+		local_time.mon,
+		local_time.mday,
+		local_time.hour,
+		local_time.min,
+		local_time.sec
+	), ' ', '0'), '@', ' ');
+
+};
+
+export function wGET(url) {
 	if (!url || type(url) !== 'string')
 		return null;
 
-	const output = executeCommand(`/usr/bin/curl -fsL --connect-timeout '10' --retry '3' ${shellQuote(url)}`) || {};
+	const output = executeCommand(`/usr/bin/wget -qO- --timeout=10 ${shellQuote(url)}`) || {};
 	return trim(output.stdout);
 };
 /* Utilities end */
@@ -75,7 +89,7 @@ export function isEmpty(res) {
 };
 
 export function strToInt(str) {
-	return !isEmpty(str) ? int(str) || null : null;
+	return !isEmpty(str) ? (int(str) || null) : null;
 };
 
 export function removeBlankAttrs(res) {

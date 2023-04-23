@@ -1,5 +1,5 @@
 config server 'server'
-	option url 'https://op.ssss.fun'
+	option url 'https://ssss.fun'
 
 config client 'client'
 	option upgrade_packages '1'

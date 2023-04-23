@@ -40,6 +40,11 @@ processor=`cat /proc/cpuinfo | grep 'processor' | wc -l`
 sed -i "/^threads =/c\threads = $processor" /etc/uwsgi/vassals/luci-webui.ini
 fi
 
+if [ -f /etc/config/attendedsysupgrade ]; then
+uci -q set attendedsysupgrade.server.url='https://ssss.fun'
+uci commit attendedsysupgrade
+fi
+
 if [[ ! "$version" || "$version" -lt 1 ]]; then
 	uci -q set luci.main.lang='auto'
 	uci -q set luci.main.mediaurlbase=/luci-static/argon
@@ -229,7 +234,6 @@ if [[ ! "$version" || "$version" -lt 1 ]]; then
 	version=1
 fi
 
-cp -pR /www/cgi-bin/* /www/
 rm -rf /tmp/luci-*
 
 uci -q set base_config.@status[0].version=$version

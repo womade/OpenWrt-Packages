@@ -9,7 +9,6 @@ START=99
 STOP=10
 
 NAME="unblockneteasemusic"
-UPGRADE_CONF="/lib/upgrade/keep.d/$NAME"
 UNM_DIR="/usr/share/$NAME"
 RUN_DIR="/var/run/$NAME"
 
@@ -48,21 +47,21 @@ append_filter_client() {
 
 	is_enabled "$cfg" "enable" || return 1
 
-	local ip_addr filter_mode
-	config_get ip_addr "$cfg" "ip_addr"
+	local mac_addr filter_mode
+	config_get mac_addr "$cfg" "mac_addr"
 	config_get filter_mode "$cfg" "filter_mode"
-	[ -n "$ip_addr" -a -n "$filter_mode" ] || return 1
+	[ -n "$mac_addr" -a -n "$filter_mode" ] || return 1
 
 	case "${filter_mode}" in
 	"disable_http")
-		acl_http_addr="${acl_http_addr:+$acl_http_addr\n}${ip_addr}"
+		acl_http_addr="${acl_http_addr:+$acl_http_addr\n}${mac_addr}"
 		;;
 	"disable_https")
-		acl_https_addr="${acl_https_addr:+$acl_https_addr\n}${ip_addr}"
+		acl_https_addr="${acl_https_addr:+$acl_https_addr\n}${mac_addr}"
 		;;
 	"disable_all")
-		acl_http_addr="${acl_http_addr:+$acl_http_addr\n}${ip_addr}"
-		acl_https_addr="${acl_https_addr:+$acl_https_addr\n}${ip_addr}"
+		acl_http_addr="${acl_http_addr:+$acl_http_addr\n}${mac_addr}"
+		acl_https_addr="${acl_https_addr:+$acl_https_addr\n}${mac_addr}"
 		;;
 	esac
 }
@@ -83,7 +82,7 @@ start_service() {
 
 	procd_open_instance "$NAME"
 	procd_set_param command node "$UNM_DIR/core/app.js"
-	append_param "-a" "0.0.0.0"
+	append_param "-a" "::"
 
 	local http_port https_port hijack_ways
 	config_get http_port "config" "http_port" "5200"
@@ -115,6 +114,7 @@ start_service() {
 	append_param_env "config" "youtube_key" "YOUTUBE_KEY"
 	append_param_env "config" "self_issue_cert_crt" "SIGN_CERT" "$UNM_DIR/core/server.crt"
 	append_param_env "config" "self_issue_cert_key" "SIGN_KEY" "$UNM_DIR/core/server.key"
+	append_param_env "config" "local_vip" "ENABLE_LOCAL_VIP"
 
 	append_param_boolenv "config" "follow_source_order" "FOLLOW_SOURCE_ORDER"
 	append_param_boolenv "config" "search_album" "SEARCH_ALBUM"
@@ -122,7 +122,6 @@ start_service() {
 	append_param_boolenv "config" "select_max_br" "SELECT_MAX_BR"
 	append_param_boolenv "config" "disable_upgrade_check" "DISABLE_UPGRADE_CHECK"
 	append_param_boolenv "config" "block_ads" "BLOCK_ADS"
-	append_param_boolenv "config" "local_vip" "ENABLE_LOCAL_VIP"
 	case "$(config_get "config" "replace_music_source")" in
 		"lower_than_192kbps") procd_append_param env MIN_BR="192000" ;;
 		"lower_than_320kbps") procd_append_param env MIN_BR="320000" ;;
@@ -140,24 +139,24 @@ start_service() {
 		rm -f "/tmp/dnsmasq.d/dnsmasq-$NAME.conf"
 		cat <<-EOF > "/tmp/dnsmasq.d/dnsmasq-$NAME.conf"
 			dhcp-option=252,http://${lan_addr}:${http_port}/proxy.pac
-			nftset=/.music.163.com/inet#fw4#neteasemusic
-			nftset=/interface.music.163.com/inet#fw4#neteasemusic
-			nftset=/interface3.music.163.com/inet#fw4#neteasemusic
-			nftset=/apm.music.163.com/inet#fw4#neteasemusic
-			nftset=/apm3.music.163.com/inet#fw4#neteasemusic
-			nftset=/clientlog.music.163.com/inet#fw4#neteasemusic
-			nftset=/clientlog3.music.163.com/inet#fw4#neteasemusic
+			nftset=/.music.163.com/inet#fw4#neteasemusic,6#inet#fw4#neteasemusic6
+			nftset=/interface.music.163.com/inet#fw4#neteasemusic,6#inet#fw4#neteasemusic6
+			nftset=/interface3.music.163.com/inet#fw4#neteasemusic,6#inet#fw4#neteasemusic6
+			nftset=/apm.music.163.com/inet#fw4#neteasemusic,6#inet#fw4#neteasemusic6
+			nftset=/apm3.music.163.com/inet#fw4#neteasemusic,6#inet#fw4#neteasemusic6
+			nftset=/clientlog.music.163.com/inet#fw4#neteasemusic,6#inet#fw4#neteasemusic6
+			nftset=/clientlog3.music.163.com/inet#fw4#neteasemusic,6#inet#fw4#neteasemusic6
 		EOF
-		/etc/init.d/dnsmasq reload 2>"/dev/null"
+		/etc/init.d/dnsmasq restart 2>"/dev/null"
 
 		config_foreach append_filter_client "acl_rule"
 
-		local netease_music_ips="$(uclient-fetch -qO- "http://httpdns.n.netease.com/httpdns/v2/d?domain=music.163.com,interface.music.163.com,interface3.music.163.com,apm.music.163.com,apm3.music.163.com,clientlog.music.163.com,clientlog3.music.163.com" |jsonfilter -e '@.data.*.ip.*')"
-		local netease_music_ips2="$(uclient-fetch -qO- "https://music.httpdns.c.163.com/d" --post-data="music.163.com,interface.music.163.com,interface3.music.163.com,apm.music.163.com,apm3.music.163.com,clientlog.music.163.com,clientlog3.music.163.com" |jsonfilter -e '@.dns.*["ips"].*')"
-
+		local netease_music_ips="$(wget -qO- "http://httpdns.n.netease.com/httpdns/v2/d?domain=music.163.com,interface.music.163.com,interface3.music.163.com,apm.music.163.com,apm3.music.163.com,clientlog.music.163.com,clientlog3.music.163.com" |jsonfilter -e '@.data.*.ip.*')"
+		local netease_music_ips2="$(wget -qO- "https://music.httpdns.c.163.com/d" --post-data="music.163.com,interface.music.163.com,interface3.music.163.com,apm.music.163.com,apm3.music.163.com,clientlog.music.163.com,clientlog3.music.163.com" |jsonfilter -e '@.dns.*["ips"].*')"
 		json_add_string acl_http_addr "$(echo -e "${acl_http_addr}" | sort -u)"
 		json_add_string acl_https_addr "$(echo -e "${acl_https_addr}" | sort -u)"
 		json_add_string neteasemusic_addr "$(echo -e "${netease_music_ips}\n${netease_music_ips2}" | sort -u)"
+
 		json_dump > "$RUN_DIR/fw4.info"
 		utpl -F "$RUN_DIR/fw4.info" -S "$UNM_DIR/nftables.ut" > "$RUN_DIR/fw4.nft"
 
@@ -198,9 +197,7 @@ start_service() {
 			address=/clientlog3.music.163.com/${lan_addr}
 			address=/music.httpdns.c.163.com/0.0.0.0
 		EOF
-		/etc/init.d/dnsmasq reload 2>"/dev/null"
-
-		ip route add "223.252.199.10" dev lo
+		/etc/init.d/dnsmasq restart 2>"/dev/null"
 	fi
 
 	procd_close_instance
@@ -221,26 +218,12 @@ stop_service() {
 	sed -i "/$NAME/d" "/etc/crontabs/root"
 	/etc/init.d/cron restart
 
-	rm -f "${UPGRADE_CONF}"
-	is_enabled "config" "keep_core_when_upgrade" && {
-		echo "$UNM_DIR/core/" >> "${UPGRADE_CONF}"
-		echo "$UNM_DIR/local_ver" >> "${UPGRADE_CONF}"
-	}
-
-	local self_issue_cert_crt self_issue_cert_key
-	config_get "self_issue_cert_crt" "config" "self_issue_cert_crt"
-	config_get "self_issue_cert_key" "config" "self_issue_cert_key"
-	if [ -f "${self_issue_cert_crt}" ] && [ -f "${self_issue_cert_key}" ]; then
-		echo "${self_issue_cert_crt}" >> "${UPGRADE_CONF}"
-		echo "${self_issue_cert_key}" >> "${UPGRADE_CONF}"
-	fi
-
 	local chain settable
 	for chain in "netease_cloud_music_redir" "netease_cloud_music"; do
 		nft flush chain inet fw4 "$chain" 2>"/dev/null"
 		nft delete chain inet fw4 "$chain" 2>"/dev/null"
 	done
-	for settable in "acl_neteasemusic_http" "acl_neteasemusic_https" "neteasemusic"; do
+	for settable in "acl_neteasemusic_http" "acl_neteasemusic_https" "neteasemusic" "neteasemusic6"; do
 		nft flush set inet fw4 "$settable" 2>"/dev/null"
 		nft delete set inet fw4 "$settable" 2>"/dev/null"
 	done
@@ -249,9 +232,7 @@ stop_service() {
 	echo > "$RUN_DIR/fw4.nft"
 
 	rm -f "/tmp/dnsmasq.d/dnsmasq-$NAME.conf"
-	/etc/init.d/dnsmasq reload 2>"/dev/null"
-
-	ip route del "223.252.199.10" 2>"/dev/null"
+	/etc/init.d/dnsmasq restart 2>"/dev/null"
 
 	rm -f "$RUN_DIR/run.log"
 }

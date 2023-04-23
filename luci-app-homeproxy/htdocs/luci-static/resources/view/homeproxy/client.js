@@ -14,6 +14,7 @@
 'require view';
 
 'require homeproxy as hp';
+'require tools.firewall as fwtool';
 'require tools.widgets as widgets';
 
 var callServiceList = rpc.declare({
@@ -166,7 +167,7 @@ return view.extend({
 		o.rmempty = false;
 		o.depends({'routing_mode': 'custom', '!reverse': true});
 		o.validate = function(section_id, value) {
-			if (section_id && !['local', 'wan'].includes(value)) {
+			if (section_id && !['wan'].includes(value)) {
 				let ipv6_support = this.map.lookupOption('ipv6_support', section_id)[0].formvalue(section_id);
 
 				if (!value)
@@ -176,6 +177,29 @@ return view.extend({
 			}
 
 			return true;
+		}
+
+		if (features.hp_has_chinadns_ng) {
+			o = s.taboption('routing', form.Value, 'china_dns_server', _('China DNS server'),
+				_('You can only have one server set.'));
+			o.value('', _('Disable'));
+			o.value('wan', _('Use DNS server from WAN'));
+			o.value('wan_114', _('Use DNS server from WAN + 114DNS'));
+			o.value('223.5.5.5', _('Aliyun Public DNS (223.5.5.5)'));
+			o.value('210.2.4.8', _('CNNIC Public DNS (210.2.4.8)'));
+			o.value('119.29.29.29', _('Tencent Public DNS (119.29.29.29)'));
+			o.value('114.114.114.114', _('Xinfeng Public DNS (114.114.114.114)'));
+			o.depends('routing_mode', 'bypass_mainland_china');
+			o.validate = function(section_id, value) {
+				if (section_id && value && !['wan', 'wan_114'].includes(value)) {
+					let ipv6_support = this.map.lookupOption('ipv6_support', section_id)[0].formvalue(section_id);
+
+					if (!stubValidator.apply((ipv6_support === '1') ? 'ipaddr' : 'ip4addr', value))
+						return _('Expecting: %s').format(_('valid IP address'));
+				}
+
+				return true;
+			}
 		}
 
 		o = s.taboption('routing', form.ListValue, 'routing_mode', _('Routing mode'));
@@ -217,9 +241,9 @@ return view.extend({
 
 		o = s.taboption('routing', form.ListValue, 'proxy_mode', _('Proxy mode'));
 		o.value('redirect', _('Redirect TCP'));
-		o.value('redirect_tproxy', _('Redirect TCP + TProxy UDP'));
-		/* This detection is required as the `system` stack doesn't work currently */
-		if (features.with_gvisor || features.with_lwip) {
+		if (features.hp_has_tproxy)
+			o.value('redirect_tproxy', _('Redirect TCP + TProxy UDP'));
+		if (features.hp_has_tun) {
 			o.value('redirect_tun', _('Redirect TCP + Tun UDP'));
 			o.value('tun', _('Tun TCP/UDP'));
 		}
@@ -242,13 +266,8 @@ return view.extend({
 			so.value('gvisor', _('gVisor'));
 		if (features.with_lwip)
 			so.value('lwip', _('LWIP'));
-		/*
-		* The `system` stack doesn't work properly on OpenWrt, so hide it
-		* until it gets fixed.
-		*
-		* o.value('system', _('System'));
-		*/
-		so.default = 'gvisor';
+		so.value('system', _('System'));
+		so.default = 'system';
 		so.depends('homeproxy.config.proxy_mode', 'redirect_tun');
 		so.depends('homeproxy.config.proxy_mode', 'tun');
 		so.rmempty = false;
@@ -265,7 +284,6 @@ return view.extend({
 		so = ss.option(form.Flag, 'endpoint_independent_nat', _('Enable endpoint-independent NAT'),
 			_('Performance may degrade slightly, so it is not recommended to enable on when it is not needed.'));
 		so.default = so.enabled;
-		so.depends('tcpip_stack', 'gvisor');
 		so.depends('tcpip_stack', 'gvisor');
 		so.rmempty = false;
 
@@ -305,6 +323,7 @@ return view.extend({
 
 		ss = o.subsection;
 		ss.addremove = true;
+		ss.rowcolors = true;
 		ss.sortable = true;
 		ss.nodescriptions = true;
 		ss.modaltitle = L.bind(hp.loadModalTitle, this, _('Routing node'), _('Add a routing node'), data[0]);
@@ -380,6 +399,7 @@ return view.extend({
 
 		ss = o.subsection;
 		ss.addremove = true;
+		ss.rowcolors = true;
 		ss.sortable = true;
 		ss.nodescriptions = true;
 		ss.modaltitle = L.bind(hp.loadModalTitle, this, _('Routing rule'), _('Add a routing rule'), data[0]);
@@ -563,6 +583,7 @@ return view.extend({
 
 		ss = o.subsection;
 		ss.addremove = true;
+		ss.rowcolors = true;
 		ss.sortable = true;
 		ss.nodescriptions = true;
 		ss.modaltitle = L.bind(hp.loadModalTitle, this, _('DNS server'), _('Add a DNS server'), data[0]);
@@ -651,6 +672,7 @@ return view.extend({
 
 		ss = o.subsection;
 		ss.addremove = true;
+		ss.rowcolors = true;
 		ss.sortable = true;
 		ss.nodescriptions = true;
 		ss.modaltitle = L.bind(hp.loadModalTitle, this, _('DNS rule'), _('Add a DNS rule'), data[0]);
@@ -827,20 +849,6 @@ return view.extend({
 		/* LAN IP policy start */
 		ss.tab('lan_ip_policy', _('LAN IP Policy'));
 
-		var ipaddrs = {}, ip6addrs = {};
-		Object.keys(hosts).forEach(function(mac) {
-			var addrs = L.toArray(hosts[mac].ipaddrs || hosts[mac].ipv4);
-
-			for (var i = 0; i < addrs.length; i++)
-				ipaddrs[addrs[i]] = hosts[mac].name || mac;
-		});
-		Object.keys(hosts).forEach(function(mac) {
-			var addrs = L.toArray(hosts[mac].ip6addrs || hosts[mac].ipv6);
-
-			for (var i = 0; i < addrs.length; i++)
-				ip6addrs[addrs[i]] = hosts[mac].name || mac;
-		});
-
 		so = ss.taboption('lan_ip_policy', form.ListValue, 'lan_proxy_mode', _('Proxy filter mode'));
 		so.value('disabled', _('Disable'));
 		so.value('listed_only', _('Proxy listed only'));
@@ -848,62 +856,39 @@ return view.extend({
 		so.default = 'disabled';
 		so.rmempty = false;
 
-		so = ss.taboption('lan_ip_policy', form.DynamicList, 'lan_direct_ipv4_ips', _('Direct IPv4 IP-s'));
-		so.datatype = 'or(ip4addr, cidr4)';
+		so = fwtool.addIPOption(ss, 'lan_ip_policy', 'lan_direct_ipv4_ips', _('Direct IPv4 IP-s'), null, 'ipv4', hosts, true);
 		so.depends('lan_proxy_mode', 'except_listed');
-		L.sortedKeys(ipaddrs, null, 'addr').forEach(function(ipv4) {
-			so.value(ipv4, '%s (%s)'.format(ipv4, ipaddrs[ipv4]));
-		});
 
-		so = ss.taboption('lan_ip_policy', form.DynamicList, 'lan_direct_ipv6_ips', _('Direct IPv6 IP-s'));
-		so.datatype = 'or(ip6addr, cidr6)';
+		so = fwtool.addIPOption(ss, 'lan_ip_policy', 'lan_direct_ipv6_ips', _('Direct IPv6 IP-s'), null, 'ipv6', hosts, true);
+		so.depends({'lan_proxy_mode': 'except_listed', 'homeproxy.config.ipv6_support': '1'});
+
+		so = fwtool.addMACOption(ss, 'lan_ip_policy', 'lan_direct_mac_addrs', _('Direct MAC-s'), null, hosts);
 		so.depends('lan_proxy_mode', 'except_listed');
-		L.sortedKeys(ip6addrs, null, 'addr').forEach(function(ipv6) {
-			so.value(ipv6, '%s (%s)'.format(ipv6, ip6addrs[ipv6]));
-		});
-		so.depends('homeproxy.config.ipv6_support', '1');
 
-		so = ss.taboption('lan_ip_policy', form.DynamicList, 'lan_proxy_ipv4_ips', _('Proxy IPv4 IP-s'));
-		so.datatype = 'or(ip4addr, cidr4)';
+		so = fwtool.addIPOption(ss, 'lan_ip_policy', 'lan_proxy_ipv4_ips', _('Proxy IPv4 IP-s'), null, 'ipv4', hosts, true);
 		so.depends('lan_proxy_mode', 'listed_only');
-		L.sortedKeys(ipaddrs, null, 'addr').forEach(function(ipv4) {
-			so.value(ipv4, '%s (%s)'.format(ipv4, ipaddrs[ipv4]));
-		});
 
-		so = ss.taboption('lan_ip_policy', form.DynamicList, 'lan_proxy_ipv6_ips', _('Proxy IPv6 IP-s'));
-		so.datatype = 'or(ip6addr, cidr6)';
+		so = fwtool.addIPOption(ss, 'lan_ip_policy', 'lan_proxy_ipv6_ips', _('Proxy IPv6 IP-s'), null, 'ipv6', hosts, true);
+		so.depends({'lan_proxy_mode': 'listed_only', 'homeproxy.config.ipv6_support': '1'});
+
+		so = fwtool.addMACOption(ss, 'lan_ip_policy', 'lan_proxy_mac_addrs', _('Proxy MAC-s'), null, hosts);
 		so.depends('lan_proxy_mode', 'listed_only');
-		L.sortedKeys(ip6addrs, null, 'addr').forEach(function(ipv6) {
-			so.value(ipv6, '%s (%s)'.format(ipv6, ip6addrs[ipv6]));
-		});
+
+		so = fwtool.addIPOption(ss, 'lan_ip_policy', 'lan_gaming_mode_ipv4_ips', _('Gaming mode IPv4 IP-s'), null, 'ipv4', hosts, true);
+
+		so = fwtool.addIPOption(ss, 'lan_ip_policy', 'lan_gaming_mode_ipv6_ips', _('Gaming mode IPv6 IP-s'), null, 'ipv6', hosts, true);
 		so.depends('homeproxy.config.ipv6_support', '1');
 
-		so = ss.taboption('lan_ip_policy', form.DynamicList, 'lan_gaming_mode_ipv4_ips', _('Gaming mode IPv4 IP-s'));
-		so.datatype = 'or(ip4addr, cidr4)';
-		L.sortedKeys(ipaddrs, null, 'addr').forEach(function(ipv4) {
-			so.value(ipv4, '%s (%s)'.format(ipv4, ipaddrs[ipv4]));
-		});
+		so = fwtool.addMACOption(ss, 'lan_ip_policy', 'lan_gaming_mode_mac_addrs', _('Gaming mode MAC-s'), null, hosts);
 
-		so = ss.taboption('lan_ip_policy', form.DynamicList, 'lan_gaming_mode_ipv6_ips', _('Gaming mode IPv6 IP-s'));
-		so.datatype = 'or(ip6addr, cidr6)';
-		L.sortedKeys(ip6addrs, null, 'addr').forEach(function(ipv6) {
-			so.value(ipv6, '%s (%s)'.format(ipv6, ip6addrs[ipv6]));
-		});
-		so.depends('homeproxy.config.ipv6_support', '1');
-
-		so = ss.taboption('lan_ip_policy', form.DynamicList, 'lan_global_proxy_ipv4_ips', _('Global proxy IPv4 IP-s'));
-		so.datatype = 'or(ip4addr, cidr4)';
-		L.sortedKeys(ipaddrs, null, 'addr').forEach(function(ipv4) {
-			so.value(ipv4, '%s (%s)'.format(ipv4, ipaddrs[ipv4]));
-		});
+		so = fwtool.addIPOption(ss, 'lan_ip_policy', 'lan_global_proxy_ipv4_ips', _('Global proxy IPv4 IP-s'), null, 'ipv4', hosts, true);
 		so.depends({'homeproxy.config.routing_mode': 'custom', '!reverse': true});
 
-		so = ss.taboption('lan_ip_policy', form.DynamicList, 'lan_global_proxy_ipv6_ips', _('Global proxy IPv6 IP-s'));
-		so.datatype = 'or(ip6addr, cidr6)';
-		L.sortedKeys(ip6addrs, null, 'addr').forEach(function(ipv6) {
-			so.value(ipv6, '%s (%s)'.format(ipv6, ip6addrs[ipv6]));
-		});
+		so = fwtool.addIPOption(ss, 'lan_ip_policy', 'lan_global_proxy_ipv6_ips', _('Global proxy IPv6 IP-s'), null, 'ipv6', hosts, true);
 		so.depends({'homeproxy.config.routing_mode': /^((?!custom).)+$/, 'homeproxy.config.ipv6_support': '1'});
+
+		so = fwtool.addMACOption(ss, 'lan_ip_policy', 'lan_global_proxy_mac_addrs', _('Global proxy MAC-s'), null, hosts);
+		so.depends({'homeproxy.config.routing_mode': 'custom', '!reverse': true});
 		/* LAN IP policy end */
 
 		/* WAN IP policy start */

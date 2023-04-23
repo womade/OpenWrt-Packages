@@ -10,10 +10,10 @@ include $(TOPDIR)/rules.mk
 PKG_ARCH_quickstart:=$(ARCH)
 
 PKG_NAME:=quickstart
-PKG_VERSION:=0.6.11
-PKG_RELEASE:=50
+PKG_VERSION:=0.7.4
+PKG_RELEASE:=53
 PKG_SOURCE:=$(PKG_NAME)-binary-$(PKG_VERSION).tar.gz
-PKG_SOURCE_URL:=https://fw.koolcenter.com/binary/quickstart/
+PKG_SOURCE_URL:=https://github.com/linkease/istore-packages/releases/download/prebuilt/
 PKG_HASH:=skip
 
 PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-binary-$(PKG_VERSION)
@@ -28,7 +28,7 @@ define Package/$(PKG_NAME)
 	CATEGORY:=Network
 	SUBMENU:=Web Servers/Proxies
 	TITLE:=Quickstart, the quick start.
-	DEPENDS:=@(x86_64||aarch64||arm) +shadow-utils +shadow-useradd +mount-utils +block-mount +lsblk +e2fsprogs +parted +smartmontools +smartd +mdadm +ip-full +ubus +uci
+	DEPENDS:=@(x86_64||aarch64||arm) +shadow-utils +shadow-useradd +mount-utils +block-mount +lsblk +e2fsprogs +parted +smartmontools +smartd +mdadm +ip-full +ubus +uci +bash
 	URL:=https://easepi.linkease.com/
 endef
 

@@ -17,7 +17,8 @@ echo -e "\n"
 echo -e "uclient-fetch info:"
 opkg info uclient-fetch
 opkg info libustream-*
-uclient-fetch -O- 'https://api.github.com/repos/UnblockNeteaseMusic/server/commits?sha=enhanced&path=precompiled' | jsonfilter -e '@[0].sha' || echo -e "Failed to connect to GitHub with uclient-fetch."
+opkg info wget-ssl
+wget -O- 'https://api.github.com/repos/UnblockNeteaseMusic/server/commits?sha=enhanced&path=precompiled' | jsonfilter -e '@[0].sha' || echo -e "Failed to connect to GitHub with uclient-fetch."
 echo -e "\n"
 
 echo -e "Node.js info:"
@@ -71,8 +72,6 @@ echo -e "\n"
 
 [ -n "$is_stopped" ] || {
 	echo -e "Firewall info:"
-	[ -e "/etc/nftables.d/90-$NAME-rules.nft" ] || echo -e "netease_cloud_music nft rule file not found."
-	echo -e ""
 	nft list set inet fw4 "acl_neteasemusic_http" 2>&1
 	echo -e ""
 	nft list set inet fw4 "acl_neteasemusic_https" 2>&1

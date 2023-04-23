@@ -80,6 +80,7 @@ return view.extend({
 
 	render: function(data) {
 		var m, s, o;
+		var hosts = data[1]?.hosts;
 
 		m = new form.Map('unblockneteasemusic', _('解除网易云音乐播放限制'),
 			_('原理：采用 [Bilibili/JOOX/酷狗/酷我/咪咕/pyncmd/QQ/Youtube] 等音源，替换网易云音乐 无版权/收费 歌曲链接<br/>' +
@@ -173,9 +174,11 @@ return view.extend({
 			('启用后，可屏蔽应用内<strong>部分</strong>广告。'));
 		o.default = o.disabled;
 
-		o = s.option(form.Flag, 'local_vip', _('启用本地 VIP'),
-			_('启用后，可以使用去广告、个性换肤、鲸云音效等本地功能。'));
-		o.default = o.disabled;
+		o = s.option(form.ListValue, 'local_vip', _('伪装本地 VIP'),
+			_('设置后，可以使用去广告、个性换肤、鲸云音效等本地功能。'));
+		o.value('', _('禁用'));
+		o.value('cvip', _('CVIP'));
+		o.value('svip', _('SVIP'));
 
 		o = s.option(form.Flag, 'auto_update', _('启用自动更新'),
 			_('启用后，每天将定时自动检查最新核心版本并更新。'));
@@ -251,10 +254,6 @@ return view.extend({
 		o.rmempty = false;
 		o.depends('advanced_mode', '1');
 
-		o = s.option(form.Flag, 'keep_core_when_upgrade', _('升级时保留核心程序'));
-		o.default = o.disabled;
-		o.depends('advanced_mode', '1');
-
 		o = s.option(form.Flag, 'pub_access', _('部署到公网'),
 			_('默认仅放行局域网请求，如需提供公开访问请勾选此选项。'));
 		o.default = o.disabled;
@@ -312,14 +311,12 @@ return view.extend({
 		o.default = o.enabled;
 		o.rmempty = false;
 
-		o = s.option(form.Value, 'ip_addr', _('IP 地址'));
-		o.datatype = 'ip4addr';
-		for (var i of Object.entries(data[1].hosts))
-			for (var v in i[1].ipaddrs)
-				if (i[1].ipaddrs[v]) {
-					var ip_addr = i[1].ipaddrs[v], ip_host = i[1].name;
-					o.value(ip_addr, ip_host ? String.format('%s (%s)', ip_host, ip_addr) : ip_addr)
-				}
+		o = s.option(form.Value, 'mac_addr', _('MAC 地址'));
+		o.datatype = 'macaddr';
+		Object.keys(hosts).forEach(function(mac) {
+			var hint = hosts[mac].name || L.toArray(hosts[mac].ipaddrs || hosts[mac].ipv4)[0];
+			o.value(mac, hint ? '%s (%s)'.format(mac, hint) : mac);
+		});
 		o.rmempty = false;
 
 		o = s.option(form.ListValue, 'filter_mode', _('规则'));
