@@ -64,6 +64,22 @@ function to_check()
 		model = "rockchip_armv8/friendlyarm_nanopi-r5c"
 		check_update()
 		download_url = "https://op.ssss.fun/firmware/" ..model.. "/" ..remote_version.. "-openwrt-rockchip-armv8-friendlyarm_nanopi-r5c-squashfs-sysupgrade.img.gz"
+    elseif board_name:match("nanopi%-r6s$") then
+		model = "rockchip_rk3588_armv8/friendlyelec_nanopi-r6s"
+		check_update()
+		download_url = "https://op.ssss.fun/firmware/" ..model.. "/" ..remote_version.. "-openwrt-rockchip_rk3588_armv8-friendlyelec_nanopi-r6s-squashfs-sysupgrade.img.gz"
+    elseif board_name:match("nanopi%-r6c$") then
+		model = "rockchip_rk3588_armv8/friendlyelec_nanopi-r6c"
+		check_update()
+		download_url = "https://op.ssss.fun/firmware/" ..model.. "/" ..remote_version.. "-openwrt-rockchip_rk3588_armv8-friendlyelec_nanopi-r6c-squashfs-sysupgrade.img.gz"
+    elseif board_name:match("orangepi%-5$") then
+		model = "rockchip_rk3588_armv8/xunlong_orangepi-5"
+		check_update()
+		download_url = "https://op.ssss.fun/firmware/" ..model.. "/" ..remote_version.. "-openwrt-rockchip_rk3588_armv8-xunlong_orangepi-5-squashfs-sysupgrade.img.gz"
+    elseif board_name:match("orangepi%-5%-plus$") then
+		model = "rockchip_rk3588_armv8/xunlong_orangepi-5-plus"
+		check_update()
+		download_url = "https://op.ssss.fun/firmware/" ..model.. "/" ..remote_version.. "-openwrt-rockchip_rk3588_armv8-xunlong_orangepi-5-plus-squashfs-sysupgrade.img.gz"
     elseif board_name:match("nanopi%-r4se$") then
 		model = "rockchip_armv8/friendlyarm_nanopi-r4se"
 		check_update()
@@ -565,21 +581,29 @@ function to_check()
 		check_update()
 		download_url = "https://op.ssss.fun/firmware/" ..model.. "/" ..remote_version.. "-openwrt-ath79-nand-zte_mf286-squashfs-sysupgrade.bin"
     elseif board_name:match("gl%-mt2500$") then
-		model = "mt7981/glinet_gl-mt2500"
+		model = "mediatek_mt7981/glinet_gl-mt2500"
 		check_update()
-		download_url = "https://op.ssss.fun/firmware/" ..model.. "/" ..remote_version.. "-openwrt-mediatek_gl-mt7981-glinet_gl-mt2500-squashfs-sysupgrade.bin"
+		download_url = "https://op.ssss.fun/firmware/" ..model.. "/" ..remote_version.. "-openwrt-mediatek-mt7981-glinet_gl-mt2500-squashfs-sysupgrade.bin"
     elseif board_name:match("gl%-mt3000$") then
-		model = "mt7981/glinet_gl-mt3000"
+		model = "mediatek_filogic/glinet_gl-mt3000"
 		check_update()
-		download_url = "https://op.ssss.fun/firmware/" ..model.. "/" ..remote_version.. "-openwrt-mediatek_gl-mt7981-glinet_gl-mt3000-squashfs-sysupgrade.bin"
+		download_url = "https://op.ssss.fun/firmware/" ..model.. "/" ..remote_version.. "-openwrt-mediatek-filogic-glinet_gl-mt3000-squashfs-sysupgrade.bin"
     elseif board_name:match("gl%-x3000$") then
-		model = "mt7981/glinet_gl-x3000"
+		model = "mediatek_mt7981/glinet_gl-x3000"
 		check_update()
-		download_url = "https://op.ssss.fun/firmware/" ..model.. "/" ..remote_version.. "-openwrt-mediatek_gl-mt7981-glinet_gl-x3000-squashfs-sysupgrade.bin"
+		download_url = "https://op.ssss.fun/firmware/" ..model.. "/" ..remote_version.. "-openwrt-mediatek-mt7981-glinet_gl-x3000-squashfs-sysupgrade.bin"
     elseif board_name:match("gl%-xe3000$") then
-		model = "mt7981/glinet_gl-xe3000"
+		model = "mediatek_mt7981/glinet_gl-xe3000"
 		check_update()
-		download_url = "https://op.ssss.fun/firmware/" ..model.. "/" ..remote_version.. "-openwrt-mediatek_gl-mt7981-glinet_gl-xe3000-squashfs-sysupgrade.bin"
+		download_url = "https://op.ssss.fun/firmware/" ..model.. "/" ..remote_version.. "-openwrt-mediatek-mt7981-glinet_gl-xe3000-squashfs-sysupgrade.bin"
+    elseif board_name:match("wr30u%-112M$") then
+		model = "mediatek_mt7981/xiaomi_wr30u-112M"
+		check_update()
+		download_url = "https://op.ssss.fun/firmware/" ..model.. "/" ..remote_version.. "-openwrt-mediatek-mt7981-xiaomi_wr30u-112M-squashfs-sysupgrade.bin"
+    elseif board_name:match("redmi,ax3000$") then
+		model = "ipq50xx_arm/redmi_ax3000"
+		check_update()
+		download_url = "https://op.ssss.fun/firmware/" ..model.. "/" ..remote_version.. "-openwrt-ipq50xx-arm-redmi_ax3000-squashfs-sysupgrade.bin"
     else
 		local needs_update = false
 		return {

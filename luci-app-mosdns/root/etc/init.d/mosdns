@@ -20,6 +20,8 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 
+[ ! -f /etc/openwrt_release ] && exit 0
+
 START=99
 USE_PROCD=1
 
@@ -35,10 +37,10 @@ get_config() {
     config_get enabled $1 enabled 0
     config_get adblock $1 adblock 0
     config_get ad_source $1 ad_source ""
-    config_get cache_size $1 cache_size 20000
+    config_get cache_size $1 cache_size 8000
     config_get cache_survival_time $1 cache_survival_time 86400
     config_get dump_file $1 dump_file 0
-    config_get dump_interval $1 dump_interval 600
+    config_get dump_interval $1 dump_interval 3600
     config_get enable_pipeline $1 enable_pipeline 0
     config_get geo_auto_update $1 geo_auto_update 0
     config_get geo_update_day_time $1 geo_update_day_time 2
@@ -59,6 +61,7 @@ get_config() {
     config_get idle_timeout $1 idle_timeout 30
     config_get enable_http3 $1 enable_http3 0
     config_get enable_ecs_remote $1 enable_ecs_remote 0
+    config_get dns_leak $1 dns_leak 0
 }
 
 init_yaml() {
@@ -85,11 +88,12 @@ init_yaml() {
     [ "$dump_file" -eq 1 ] && [ ! -f $DUMP_FILE ] && cp -a $DUMP_FILE_DEFAULT $DUMP_FILE
     [ "$dump_file" -eq 0 ] && \cp -a $DUMP_FILE_DEFAULT $DUMP_FILE
     if [ "$enable_ecs_remote" -eq 1 ]; then
-        ecs_remote=$(sh /usr/share/mosdns/mosdns.sh ecs_remote)
+        ecs_remote=$(sh $MOSDNS_SCRIPT ecs_remote)
         sed -i "s,ecs_remote,$ecs_remote,g" $CONF
     else
         sed -i "/ecs_remote/d;" $CONF
     fi
+    [ $dns_leak -eq 1 ] && sed -i "s,primary: query_is_local_ip,primary: query_is_remote,g" $CONF
     rm -rf $TMPDIR
 }
 

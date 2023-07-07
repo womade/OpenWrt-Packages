@@ -13,6 +13,15 @@ define Package/$(PKG_NAME)/conffiles
 /etc/mosdns/rule
 endef
 
+define Package/$(PKG_NAME)/postinst
+#!/bin/sh
+[ ! -f /etc/openwrt_release ] && exit 0
+[ -n "${IPKG_INSTROOT}" ] || {
+	sysctl -p /etc/sysctl.d/20-mosdns-buffer-increase.conf
+	exit 0
+}
+endef
+
 include $(TOPDIR)/feeds/luci/luci.mk
 
 # call BuildPackage - OpenWrt buildroot signature

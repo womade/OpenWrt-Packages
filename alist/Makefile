@@ -7,9 +7,9 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=alist
-PKG_VERSION:=3.16.0
-PKG_WEB_VERSION:=3.16.0
-PKG_RELEASE:=54
+PKG_VERSION:=3.20.1
+PKG_WEB_VERSION:=3.20.0
+PKG_RELEASE:=65
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=https://codeload.github.com/alist-org/alist/tar.gz/v$(PKG_VERSION)?
@@ -23,19 +23,19 @@ define Download/$(PKG_NAME)-web
   FILE:=$(PKG_NAME)-web-$(PKG_WEB_VERSION).tar.gz
   URL_FILE:=dist.tar.gz
   URL:=https://github.com/alist-org/alist-web/releases/download/$(PKG_WEB_VERSION)/
-  HASH:=0a08e205887dcaf17f5e57af5a2024021e35e3d29878259d372d980bbea3eedd
+  HASH:=4c97a04bbbac092f15ae475a30f61935a739617c50f2c520f54d08826694661e
 endef
 
 PKG_BUILD_DEPENDS:=golang/host
 PKG_BUILD_PARALLEL:=1
 PKG_USE_MIPS16:=0
+PKG_BUILD_FLAGS:=no-mips16
 
-PKG_ALIST:=github.com/alist-org/alist/v3/internal/conf
 GO_PKG:=github.com/alist-org/alist
 GO_PKG_LDFLAGS:=-w -s
 GO_PKG_LDFLAGS_X:= \
-	$(PKG_ALIST).Version=v$(PKG_VERSION)-$(ARCH) \
-	$(PKG_ALIST).WebVersion=$(PKG_WEB_VERSION)
+	$(GO_PKG)/v3/internal/conf.Version=v$(PKG_VERSION)-$(ARCH) \
+	$(GO_PKG)/v3/internal/conf.WebVersion=$(PKG_WEB_VERSION)
 
 include $(INCLUDE_DIR)/package.mk
 include $(TOPDIR)/feeds/packages/lang/golang/golang-package.mk
@@ -52,6 +52,10 @@ endef
 define Package/$(PKG_NAME)/description
   A file list program that supports multiple storage, powered by Gin and Solidjs.
 endef
+
+ifneq ($(CONFIG_USE_MUSL),)
+  TARGET_CFLAGS += -D_LARGEFILE64_SOURCE
+endif
 
 define Build/Prepare
 	$(call Build/Prepare/Default)

@@ -6,10 +6,41 @@
 
 'use strict';
 'require form';
+'require poll';
+'require rpc';
 'require uci';
 'require view';
 
 'require homeproxy as hp';
+
+var callServiceList = rpc.declare({
+	object: 'service',
+	method: 'list',
+	params: ['name'],
+	expect: { '': {} }
+});
+
+function getServiceStatus() {
+	return L.resolveDefault(callServiceList('homeproxy'), {}).then((res) => {
+		var isRunning = false;
+		try {
+			isRunning = res['homeproxy']['instances']['sing-box-s']['running'];
+		} catch (e) { }
+		return isRunning;
+	});
+}
+
+function renderStatus(isRunning) {
+	var spanTemp = '<em><span style="color:%s"><strong>%s %s</strong></span></em>';
+	var renderHTML;
+	if (isRunning) {
+		renderHTML = spanTemp.format('green', _('HomeProxy Server'), _('RUNNING'));
+	} else {
+		renderHTML = spanTemp.format('red', _('HomeProxy Server'), _('NOT RUNNING'));
+	}
+
+	return renderHTML;
+}
 
 return view.extend({
 	load: function() {
@@ -23,7 +54,22 @@ return view.extend({
 		var m, s, o;
 		var features = data[1];
 
-		m = new form.Map('homeproxy', _('Edit servers'));
+		m = new form.Map('homeproxy', _('HomeProxy Server'),
+			_('The modern ImmortalWrt proxy platform for ARM64/AMD64.'));
+
+		s = m.section(form.TypedSection);
+		s.render = function () {
+			poll.add(function () {
+				return L.resolveDefault(getServiceStatus()).then((res) => {
+					var view = document.getElementById('service_status');
+					view.innerHTML = renderStatus(res);
+				});
+			});
+
+			return E('div', { class: 'cbi-section', id: 'status_bar' }, [
+					E('p', { id: 'service_status' }, _('Collecting data...'))
+			]);
+		}
 
 		s = m.section(form.NamedSection, 'server', 'homeproxy', _('Global settings'));
 
@@ -77,15 +123,12 @@ return view.extend({
 		o.depends('type', 'http');
 		o.depends('type', 'naive');
 		o.depends('type', 'socks');
-		o.rmempty = false;
 		o.modalonly = true;
 
 		o = s.option(form.Value, 'password', _('Password'));
 		o.password = true;
-		o.depends('type', 'http');
-		o.depends('type', 'naive');
+		o.depends({'type': /^(http|naive|socks)$/, 'username': /[\s\S]/});
 		o.depends('type', 'shadowsocks');
-		o.depends('type', 'socks');
 		o.depends('type', 'trojan');
 		o.validate = function(section_id, value) {
 			if (section_id) {
@@ -99,6 +142,7 @@ return view.extend({
 					else if (['2022-blake3-aes-256-gcm', '2022-blake3-chacha20-poly1305'].includes(encmode))
 						return hp.validateBase64Key(44, section_id, value);
 				}
+
 				if (!value)
 					return _('Expecting: %s').format(_('non-empty value'));
 			}
