@@ -347,7 +347,7 @@ return view.extend({
 
 		var info = _('Configuration modem frequency bands. More information about the modemband application on the %seko.one.pl forum%s.').format('<a href="https://eko.one.pl/?p=openwrt-modemband" target="_blank">', '</a>');
 
-		m = new form.JSONMap(this.formdata, _('Configure modem bands'), info);
+		m = new form.JSONMap(this.formdata, _('LTE Bands Configuration'), info);
 
 		s = m.section(form.TypedSection, 'modemband', '', _(''));
 		s.anonymous = true;
@@ -362,7 +362,7 @@ return view.extend({
 					]),
 
 						E('tr', { 'class': 'tr' }, [
-						E('td', { 'class': 'td left', 'width': '33%' }, [ _('LTE bands')]),
+						E('td', { 'class': 'td left', 'width': '33%' }, [ _('Currently set LTE bands')]),
 						E('td', { 'class': 'td left', 'id': 'modemlteb' }, [ modemen || '-' ]),
 					]),
 
@@ -492,3 +492,4 @@ return view.extend({
 		]);
 	}
 });
+

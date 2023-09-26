@@ -1,14 +1,14 @@
 msgid ""
 msgstr ""
-"PO-Revision-Date: 2023-06-20 16:22+0000\n"
-"Last-Translator: ssantos <ssantos@web.de>\n"
+"PO-Revision-Date: 2023-08-20 12:46+0000\n"
+"Last-Translator: Felix Baumann <felix.bau@gmx.de>\n"
 "Language-Team: German <https://hosted.weblate.org/projects/openwrt/"
 "luciapplicationsattendedsysupgrade/de/>\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 4.18.1\n"
+"X-Generator: Weblate 5.0-dev\n"
 
 #: applications/luci-app-attendedsysupgrade/htdocs/luci-static/resources/view/attendedsysupgrade/configuration.js:21
 msgid "Address"
@@ -181,8 +181,9 @@ msgid "Queued..."
 msgstr "In Warteschlange..."
 
 #: applications/luci-app-attendedsysupgrade/htdocs/luci-static/resources/view/attendedsysupgrade/configuration.js:28
+#, fuzzy
 msgid "Rebuilders"
-msgstr ""
+msgstr "Rekonstrukteure"
 
 #: applications/luci-app-attendedsysupgrade/htdocs/luci-static/resources/view/attendedsysupgrade/overview.js:143
 msgid "Rebuilds"
@@ -242,7 +243,7 @@ msgstr "ImageBuilder einrichten"
 
 #: applications/luci-app-attendedsysupgrade/htdocs/luci-static/resources/view/attendedsysupgrade/configuration.js:51
 msgid "Show advanced options like package list modification"
-msgstr "Fortgeschrittene Einstellungen anzeigen, z.B. Paketlistenmodifizierung"
+msgstr "Erweiterte Optionen anzeigen, z.B. Paketlistenmodifizierung"
 
 #: applications/luci-app-attendedsysupgrade/htdocs/luci-static/resources/view/attendedsysupgrade/overview.js:184
 msgid "Successfully created firmware image"

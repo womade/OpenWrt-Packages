@@ -20,8 +20,8 @@ static char *replacement_user_agent_string = NULL;
 #define USER_AGENT_MATCH "\r\nUser-Agent:"
 #define USER_AGENT_MATCH_LENGTH 13
 
-#define CONNMARK_ESTIMATE_START 16
-#define CONNMARK_ESTIMATE_END 32
+#define CONNMARK_ESTIMATE_LOWER 16
+#define CONNMARK_ESTIMATE_UPPER 32
 #define CONNMARK_ESTIMATE_VERDICT 33
 
 #define CONNMARK_NOT_HTTP 43
@@ -107,15 +107,26 @@ static void send_verdict(
     }
 }
 
-static void add_to_no_http_cache(struct nf_packet *pkt) {
+static _Atomic bool conntrack_info_available = true;
+
+static void add_to_cache(struct nf_packet *pkt) {
     char *ip_str = ip_to_str(&pkt->orig.dst, pkt->orig.dst_port, pkt->orig.ip_version);
     cache_add(ip_str);
     free(ip_str);
 }
 
 static struct mark_op get_next_mark(struct nf_packet *pkt, bool has_ua) {
+    if (!conntrack_info_available) {
+        return (struct mark_op) {false, 0};
+    }
+
     // I didn't think this will happen, but just in case
-    // iptables should already have a rule to return all marked with CONNMARK_HTTP
+    // firewall should already have a rule to return all marked with CONNMARK_NOT_HTTP packets
+    if (pkt->conn_mark == CONNMARK_NOT_HTTP) {
+        syslog(LOG_WARNING, "Packet has already been marked as not http. Maybe firewall rules are wrong?");
+        return (struct mark_op) {false, 0};
+    }
+
     if (pkt->conn_mark == CONNMARK_HTTP) {
         return (struct mark_op) {false, 0};
     }
@@ -125,15 +136,15 @@ static struct mark_op get_next_mark(struct nf_packet *pkt, bool has_ua) {
     }
 
     if (!pkt->has_connmark || pkt->conn_mark == 0) {
-        return (struct mark_op) {true, CONNMARK_ESTIMATE_START};
+        return (struct mark_op) {true, CONNMARK_ESTIMATE_LOWER};
     }
 
     if (pkt->conn_mark == CONNMARK_ESTIMATE_VERDICT) {
-        add_to_no_http_cache(pkt);
+        add_to_cache(pkt);
         return (struct mark_op) {true, CONNMARK_NOT_HTTP};
     }
 
-    if (pkt->conn_mark >= CONNMARK_ESTIMATE_START && pkt->conn_mark <= CONNMARK_ESTIMATE_END) {
+    if (pkt->conn_mark >= CONNMARK_ESTIMATE_LOWER && pkt->conn_mark <= CONNMARK_ESTIMATE_UPPER) {
         return (struct mark_op) {true, pkt->conn_mark + 1};
     }
 
@@ -151,38 +162,45 @@ bool should_ignore(struct nf_packet *pkt) {
     return retval;
 }
 
-
 void handle_packet(struct nf_queue *queue, struct nf_packet *pkt) {
-    int type = pkt->orig.ip_version;
-
-    if (type == IPV4) {
-        count_ipv4_packet();
-    } else if (type == IPV6) {
-        count_ipv6_packet();
+    if (conntrack_info_available) {
+        if (!pkt->has_conntrack) {
+            conntrack_info_available = false;
+            syslog(LOG_WARNING, "Packet has no conntrack. Switching to no cache mode.");
+            syslog(LOG_WARNING, "Note that this may lead to performance degradation. Especially on low-end routers.");
+        } else {
+            init_not_http_cache();
+        }
     }
-    count_tcp_packet();
 
     struct pkt_buff *pkt_buff = NULL;
-
-    if (!pkt->has_conntrack) {
-        syslog(LOG_ERR, "Packet has no conntrack.");
-        exit(EXIT_FAILURE);
-    }
-
-    if (should_ignore(pkt)) {
+    if (conntrack_info_available && should_ignore(pkt)) {
         send_verdict(queue, pkt, (struct mark_op) {true, CONNMARK_NOT_HTTP}, NULL);
         goto end;
     }
 
-    if (type == IPV4) {
-        pkt_buff = pktb_alloc(AF_INET, pkt->payload, pkt->payload_len, 0);
-    } else if (type == IPV6) {
-        pkt_buff = pktb_alloc(AF_INET6, pkt->payload, pkt->payload_len, 0);
-    } else {
-        syslog(LOG_ERR, "Unknown ip version: %d", pkt->orig.ip_version);
-        exit(EXIT_FAILURE);
-    }
+    pkt_buff = pktb_alloc(AF_INET, pkt->payload, pkt->payload_len, 0);
+
     ASSERT(pkt_buff != NULL);
+
+    int type;
+
+    if (conntrack_info_available) {
+        type = pkt->orig.ip_version;
+    } else {
+        __auto_type ip_hdr = nfq_ip_get_hdr(pkt_buff);
+        if (ip_hdr == NULL) {
+            type = IPV6;
+        } else {
+            type = IPV4;
+        }
+    }
+
+    if (type == IPV4){
+        count_ipv4_packet();
+    } else {
+        count_ipv6_packet();
+    }
 
     if (type == IPV4) {
         __auto_type ip_hdr = nfq_ip_get_hdr(pkt_buff);
@@ -199,6 +217,13 @@ void handle_packet(struct nf_queue *queue, struct nf_packet *pkt) {
     }
 
     __auto_type tcp_hdr = nfq_tcp_get_hdr(pkt_buff);
+    if (tcp_hdr == NULL) {
+        // This packet is not tcp, just pass it
+        send_verdict(queue, pkt, (struct mark_op) {false, 0}, NULL);
+        syslog(LOG_WARNING, "Received non-tcp packet. You may set wrong firewall rules.");
+        goto end;
+    }
+
     __auto_type tcp_payload = nfq_tcp_get_payload(tcp_hdr, pkt_buff);
     __auto_type tcp_payload_len = nfq_tcp_get_payload_len(tcp_hdr, pkt_buff);
 
@@ -206,13 +231,14 @@ void handle_packet(struct nf_queue *queue, struct nf_packet *pkt) {
         send_verdict(queue, pkt, get_next_mark(pkt, false), NULL);
         goto end;
     }
+    count_tcp_packet();
 
     void *search_start = tcp_payload;
     unsigned int search_length = tcp_payload_len;
     bool has_ua = false;
 
     while (true) {
-        // mininal length of User-Agent: is 12
+        // minimal length of User-Agent: is 12
         if (search_length - 2 < USER_AGENT_MATCH_LENGTH) {
             break;
         }

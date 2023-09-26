@@ -5,12 +5,12 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=cloudreve
-PKG_VERSION:=3.8.0
-PKG_RELEASE:=30
+PKG_VERSION:=3.8.2
+PKG_RELEASE:=36
 
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL:=https://github.com/cloudreve/Cloudreve.git
-PKG_SOURCE_VERSION:=243c312066809954f74d946c44abf8c02c8d3af3
+PKG_SOURCE_VERSION:=ce832bf13d8372a84b993b8f65447bce6eced90a
 PKG_MIRROR_HASH:=skip
 
 PKG_LICENSE:=GPL-3.0-only
@@ -43,20 +43,13 @@ define Package/cloudreve/description
   storage providers.
 endef
 
-define Package/cloudreve/conffiles
-/etc/config/cloudreve
-/etc/cloudreve/
-endef
-
 define Build/Compile
 	( \
 		pushd $(PKG_BUILD_DIR)/assets ; \
 		yarn install ; \
 		yarn run build ; \
-		cd build ; \
-		find . -name "*.map" -type f -delete ; \
-		cd $(PKG_BUILD_DIR) ; \
-		zip -r - assets/build >assets.zip ; \
+		cd .. ; \
+		zip -r - assets/build > assets.zip ; \
 		popd ; \
 		$(call GoPackage/Build/Compile) ; \
 	)
@@ -67,12 +60,6 @@ define Package/cloudreve/install
 
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/Cloudreve $(1)/usr/bin/cloudreve
-	
-	$(INSTALL_DIR) $(1)/etc/init.d
-	$(INSTALL_BIN) ./files/cloudreve.init $(1)/etc/init.d/cloudreve
-
-	$(INSTALL_DIR) $(1)/etc/config
-	$(INSTALL_CONF) ./files/cloudreve.conf $(1)/etc/config/cloudreve
 endef
 
 $(eval $(call GoBinPackage,cloudreve))
